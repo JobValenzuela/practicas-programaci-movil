@@ -1,0 +1,41 @@
+name: flutter-mysql
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Configura .env}
+      MYSQL_DATABASE: mi_tienda
+      MYSQL_USER: tienda
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Configura .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mi_tienda.sql:/docker-entrypoint-initdb.d/01-mi-tienda.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_PASSWORD" mysql -h 127.0.0.1 -u tienda mi_tienda -e "SELECT 1 FROM productos LIMIT 1"']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  api:
+    build: ./api_productos
+    restart: unless-stopped
+    ports:
+      - "${API_BIND_IP:-127.0.0.1}:8080:80"
+    environment:
+      DB_HOST: db
+      DB_NAME: mi_tienda
+      DB_USER: tienda
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Configura .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, php, -r, 'exit(@file_get_contents("http://127.0.0.1/api_productos/obtener.php") === false ? 1 : 0);']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  mysql_data:
